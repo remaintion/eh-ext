@@ -18,9 +18,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,7 +121,6 @@ func (r *Repo) Parent() eh.ReadRepo {
 // Find implements the Find method of the eventhorizon.ReadRepo interface.
 func (r *Repo) Find(ctx context.Context, aggregateID uuid.UUID) (eh.Entity, error) {
 	if r.factoryFn == nil {
-		log.Println("r.factoryFn")
 		return nil, eh.RepoError{
 			Err:       ErrModelNotSet,
 			Namespace: eh.NamespaceFromContext(ctx),
@@ -149,10 +148,6 @@ func (r *Repo) Find(ctx context.Context, aggregateID uuid.UUID) (eh.Entity, erro
 			}
 		}
 	}
-
-	log.Println("-------------------")
-	log.Println("XXXXXXXXXXX", x)
-	log.Println("AFTER PARSE", entity)
 
 	return entity, nil
 }
@@ -213,24 +208,33 @@ func parseJson(v reflect.Value, raw interface{}, isString bool) reflect.Value {
 		}
 	case reflect.Map:
 		elem := c.Type().Elem()
+		var keyType = c.Type().Key()
+
 		tmp := map[string]interface{}{}
 		json.Unmarshal([]byte(raw.(string)), &tmp)
-		// t := reflect.MakeSlice(reflect.SliceOf(elem), 0, 0)
-
-		var key = "key1"
-		var keyType = reflect.TypeOf(key)
 
 		mapType := reflect.MapOf(keyType, elem)
 		t := reflect.MakeMapWithSize(mapType, 0)
+
 		for i := range tmp {
 			newV := reflect.Indirect(reflect.New(elem))
 			parsed := parseJson(newV, tmp[i], false)
-			t.SetMapIndex(reflect.ValueOf(i), parsed)
+			k := reflect.ValueOf(i)
+			switch keyType.Kind() {
+			case reflect.Int:
+				n, _ := strconv.Atoi(i)
+				k = reflect.ValueOf(n)
+			case reflect.Int64:
+				n, _ := strconv.Atoi(i)
+				k = reflect.ValueOf(int64(n))
+			case reflect.String:
+				k = reflect.ValueOf(string(i))
+			}
+			t.SetMapIndex(k, parsed)
 		}
 		c.Set(t)
 	default:
-		panic(c.Kind())
-
+		// panic(c.Kind())
 	}
 
 	return c
