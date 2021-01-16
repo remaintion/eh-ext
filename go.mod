@@ -1,4 +1,4 @@
-module gitlab.com/drivehub/eh-postgres
+module github.com/remaintion/eh-ext
 
 go 1.14
 
