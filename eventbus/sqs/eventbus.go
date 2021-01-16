@@ -116,6 +116,7 @@ func (b *EventBus) HandleEvent(ctx context.Context, event eh.Event) error {
 	}
 
 	if _, err := b.sns.Publish(publishInput); err != nil {
+		log.Println("could not publish event: " + err.Error())
 		return errors.New("could not publish event: " + err.Error())
 	}
 
