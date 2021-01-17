@@ -31,13 +31,13 @@ func CreatePubSub() *PubSub {
 
 type message struct {
 	ID      string `json:"id"`
-	Payload []byte `json:"payload"`
+	Payload string `json:"payload"`
 }
 
 func (p *PubSub) Publish(id uuid.UUID, payload []byte) error {
 	msg := message{
 		ID:      id.String(),
-		Payload: payload,
+		Payload: string(payload),
 	}
 	data, _ := json.Marshal(msg)
 	publishInput := &sns.PublishInput{
@@ -80,7 +80,7 @@ func (p *PubSub) Subscribe(id uuid.UUID) []byte {
 					p.sqs.DeleteMessage(&sqs.DeleteMessageInput{
 						ReceiptHandle: msg.ReceiptHandle,
 					})
-					dataCH <- parsed.Payload
+					dataCH <- []byte(parsed.Payload)
 					break Loop
 				}
 			}
