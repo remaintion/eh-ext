@@ -5,6 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go/pubsub v1.8.3
 	github.com/aws/aws-sdk-go v1.36.27
+	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/google/uuid v1.1.4
 	github.com/looplab/eventhorizon v0.9.0
 	go.mongodb.org/mongo-driver v1.4.2

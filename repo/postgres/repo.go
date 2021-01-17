@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	pubsub "github.com/remaintion/eh-ext/pubsub/sns"
+
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/driver/postgres"
@@ -55,33 +57,37 @@ var ErrNotmplemented = errors.New("postgres repo func is unimplemented")
 
 // Repo implements an MongoDB repository for entities.
 type Repo struct {
-	client     *gorm.DB
-	dbPrefix   string
-	collection string
-	factoryFn  func() eh.Entity
-	dbName     func(context.Context) string
-	tableName  string
+	client          *gorm.DB
+	dbPrefix        string
+	collection      string
+	factoryFn       func() eh.Entity
+	dbName          func(context.Context) string
+	tableName       string
+	enableBroadcast bool
+	pubsub          *pubsub.PubSub
 }
 
 // NewRepo creates a new Repo.
-func NewRepo(tableName string) (*Repo, error) {
+func NewRepo(tableName string, enableBroadcast bool) (*Repo, error) {
 	dbConnection := os.Getenv("DB_CONNECTION")
 	d, err := gorm.Open(postgres.Open(dbConnection), &gorm.Config{})
 	if err != nil {
 		return nil, ErrCouldNotDialDB
 	}
-	return NewRepoWithClient(d, tableName)
+	return NewRepoWithClient(d, tableName, enableBroadcast)
 }
 
 // NewRepoWithClient creates a new Repo with a client.
-func NewRepoWithClient(client *gorm.DB, tableName string) (*Repo, error) {
+func NewRepoWithClient(client *gorm.DB, tableName string, enableBroadcast bool) (*Repo, error) {
 	if client == nil {
 		return nil, ErrNoDBClient
 	}
 
 	r := &Repo{
-		client:    client,
-		tableName: tableName,
+		client:          client,
+		tableName:       tableName,
+		enableBroadcast: enableBroadcast,
+		pubsub:          pubsub.CreatePubSub(),
 	}
 
 	// Use the a prefix and namespcae from the context for DB name.
@@ -331,6 +337,19 @@ func (r *Repo) FindCustom(ctx context.Context, f func(context.Context, *mongo.Co
 	return result, ErrNotmplemented
 }
 
+func (r *Repo) BroadcastEntity(ctx context.Context, entity eh.Entity) {
+	en, err := r.Find(ctx, entity.EntityID())
+	if err != nil {
+		panic(err)
+	}
+	data, _ := json.Marshal(en)
+
+	err = r.pubsub.Publish(entity.EntityID(), data)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // Save implements the Save method of the eventhorizon.WriteRepo interface.
 func (r *Repo) Save(ctx context.Context, entity eh.Entity) error {
 	if entity.EntityID() == uuid.Nil {
@@ -348,7 +367,7 @@ func (r *Repo) Save(ctx context.Context, entity eh.Entity) error {
 	timeStr := x["updated_at"].(string)
 	timeArr := strings.Split(timeStr, "-")
 	if timeArr[0] == "0001" {
-		er := r.client.Table(r.tableName).Create(entity).Error
+		er := r.client.Table(r.tableName).Create(entity)
 		if er != nil {
 			panic(er)
 		}
@@ -357,6 +376,9 @@ func (r *Repo) Save(ctx context.Context, entity eh.Entity) error {
 		if er != nil {
 			panic(er)
 		}
+	}
+	if r.enableBroadcast {
+		r.BroadcastEntity(ctx, entity)
 	}
 	return nil
 }
