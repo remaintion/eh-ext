@@ -254,6 +254,7 @@ func (b *EventBus) handlerMessage(m eh.EventMatcher, h eh.EventHandler, msg *sqs
 
 	// Ignore non-matching events.
 	if !m.Match(event) {
+		log.Println("non matching events", event)
 		return
 	}
 
