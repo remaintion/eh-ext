@@ -367,7 +367,7 @@ func (r *Repo) Save(ctx context.Context, entity eh.Entity) error {
 	timeStr := x["updated_at"].(string)
 	timeArr := strings.Split(timeStr, "-")
 	if timeArr[0] == "0001" {
-		er := r.client.Table(r.tableName).Create(entity)
+		er := r.client.Table(r.tableName).Create(entity).Error
 		if er != nil {
 			panic(er)
 		}
