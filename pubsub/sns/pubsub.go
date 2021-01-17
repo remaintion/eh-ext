@@ -41,9 +41,8 @@ func (p *PubSub) Publish(id uuid.UUID, payload []byte) error {
 	}
 	data, _ := json.Marshal(msg)
 	publishInput := &sns.PublishInput{
-		Message:        aws.String(string(data)),
-		TopicArn:       aws.String(os.Getenv("SNS_RESULT_ARN")),
-		MessageGroupId: aws.String("SNS_RESULT_ARN"),
+		Message:  aws.String(string(data)),
+		TopicArn: aws.String(os.Getenv("SNS_RESULT_ARN")),
 	}
 	if _, err := p.sns.Publish(publishInput); err != nil {
 		panic(err)
