@@ -63,7 +63,7 @@ func (p *PubSub) Subscribe(id uuid.UUID) []byte {
 				MessageAttributeNames: []*string{
 					aws.String(sqs.QueueAttributeNameAll),
 				},
-				QueueUrl:            aws.String("SQS_RESULT_URL"),
+				QueueUrl:            aws.String(os.Getenv("SQS_RESULT_URL")),
 				MaxNumberOfMessages: aws.Int64(10),
 				VisibilityTimeout:   aws.Int64(100),
 				WaitTimeSeconds:     aws.Int64(1),
