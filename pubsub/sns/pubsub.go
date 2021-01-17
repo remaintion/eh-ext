@@ -46,7 +46,7 @@ func (p *PubSub) Publish(id uuid.UUID, payload []byte) error {
 		MessageGroupId: aws.String("SNS_RESULT_ARN"),
 	}
 	if _, err := p.sns.Publish(publishInput); err != nil {
-		return err
+		panic(err)
 	}
 	return nil
 }
@@ -57,7 +57,7 @@ func (p *PubSub) Subscribe(id uuid.UUID) []byte {
 	go func() {
 	Loop:
 		for {
-			msgResult, _ := p.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
+			msgResult, err := p.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 				AttributeNames: []*string{
 					aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
 				},
@@ -69,6 +69,9 @@ func (p *PubSub) Subscribe(id uuid.UUID) []byte {
 				VisibilityTimeout:   aws.Int64(100),
 				WaitTimeSeconds:     aws.Int64(1),
 			})
+			if err != nil {
+				panic(err)
+			}
 
 			for _, msg := range msgResult.Messages {
 				if strings.Contains(*msg.Body, id.String()) {
