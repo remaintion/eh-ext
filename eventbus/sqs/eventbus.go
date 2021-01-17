@@ -254,6 +254,10 @@ func (b *EventBus) handlerMessage(m eh.EventMatcher, h eh.EventHandler, msg *sqs
 
 	// Ignore non-matching events.
 	if !m.Match(event) {
+		b.sqs.DeleteMessage(&sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(b.queueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		})
 		log.Println("non matching events", event)
 		return
 	}
