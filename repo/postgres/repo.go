@@ -141,19 +141,7 @@ func (r *Repo) Find(ctx context.Context, aggregateID uuid.UUID) (eh.Entity, erro
 	json.Unmarshal(b, &entity)
 	v := reflect.ValueOf(entity)
 	x := reflect.Indirect(v)
-
-	for i := 0; i < x.NumField(); i++ {
-		tag := x.Type().Field(i).Tag.Get("gorm")
-
-		if strings.Contains(tag, "json") {
-			jsonTag := x.Type().Field(i).Tag.Get("json")
-			if len(result) != 0 && result[jsonTag] != nil {
-				c := reflect.Indirect(reflect.New(x.Field(i).Type()))
-				parsed := parseJson(c, result[jsonTag], true)
-				x.Field(i).Set(parsed)
-			}
-		}
-	}
+	ParseJson(x, result)
 
 	return entity, nil
 }
@@ -163,8 +151,22 @@ func CopyValue(src interface{}, dest interface{}) {
 	vp := reflect.ValueOf(dest)
 	vp.Elem().Set(srcRef)
 }
+func ParseJson(x reflect.Value, result map[string]interface{}) {
+	for i := 0; i < x.NumField(); i++ {
+		tag := x.Type().Field(i).Tag.Get("gorm")
 
-func parseJson(v reflect.Value, raw interface{}, isString bool) reflect.Value {
+		if strings.Contains(tag, "json") {
+			jsonTag := x.Type().Field(i).Tag.Get("json")
+			if len(result) != 0 && result[jsonTag] != nil {
+				c := reflect.Indirect(reflect.New(x.Field(i).Type()))
+				parsed := parseInnerJson(c, result[jsonTag], true)
+				x.Field(i).Set(parsed)
+			}
+		}
+	}
+}
+
+func parseInnerJson(v reflect.Value, raw interface{}, isString bool) reflect.Value {
 	c := reflect.Indirect(v)
 
 	switch c.Kind() {
@@ -175,7 +177,7 @@ func parseJson(v reflect.Value, raw interface{}, isString bool) reflect.Value {
 		t := reflect.MakeSlice(reflect.SliceOf(elem), 0, 0)
 		for i := range tmp {
 			newV := reflect.Indirect(reflect.New(elem))
-			parsed := parseJson(newV, tmp[i], false)
+			parsed := parseInnerJson(newV, tmp[i], false)
 			t = reflect.Append(t, parsed)
 		}
 		c.Set(t)
@@ -208,7 +210,7 @@ func parseJson(v reflect.Value, raw interface{}, isString bool) reflect.Value {
 				}
 				c.Field(j).Set(reflect.ValueOf(t))
 			default:
-				parsed := parseJson(c.Field(j), tmp[tag].(interface{}), true)
+				parsed := parseInnerJson(c.Field(j), tmp[tag].(interface{}), true)
 				c.Field(j).Set(parsed)
 			}
 		}
@@ -224,7 +226,7 @@ func parseJson(v reflect.Value, raw interface{}, isString bool) reflect.Value {
 
 		for i := range tmp {
 			newV := reflect.Indirect(reflect.New(elem))
-			parsed := parseJson(newV, tmp[i], false)
+			parsed := parseInnerJson(newV, tmp[i], false)
 			k := reflect.ValueOf(i)
 			switch keyType.Kind() {
 			case reflect.Int:
