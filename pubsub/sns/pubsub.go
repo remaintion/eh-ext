@@ -74,9 +74,11 @@ func (p *PubSub) Subscribe(id uuid.UUID) []byte {
 
 			for _, msg := range msgResult.Messages {
 				if strings.Contains(*msg.Body, id.String()) {
+					rawMessage := map[string]interface{}{}
+					json.Unmarshal([]byte(*msg.Body), &rawMessage)
+
 					var parsed message
-					str := *msg.Body
-					json.Unmarshal([]byte(str), &parsed)
+					json.Unmarshal([]byte(rawMessage["Message"].(string)), &parsed)
 					p.sqs.DeleteMessage(&sqs.DeleteMessageInput{
 						ReceiptHandle: msg.ReceiptHandle,
 					})
