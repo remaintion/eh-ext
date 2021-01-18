@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
 	eh "github.com/looplab/eventhorizon"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -43,12 +41,7 @@ type EventStore struct {
 }
 
 // NewEventStore creates a new EventStore with a Postgres
-func NewEventStore(dbPrefix string) (*EventStore, error) {
-	dbConnection := os.Getenv("DB_CONNECTION")
-	d, err := gorm.Open(postgres.Open(dbConnection), &gorm.Config{})
-	if err != nil {
-		return nil, ErrCouldNotDialDB
-	}
+func NewEventStore(d *gorm.DB, dbPrefix string) (*EventStore, error) {
 	return NewEventStoreWithClient(d, dbPrefix)
 }
 
@@ -223,9 +216,7 @@ type evt struct {
 }
 
 // Migrate event store
-func (s *EventStore) Migrate() {
-	dbConnection := os.Getenv("DB_CONNECTION")
-	d, _ := gorm.Open(postgres.Open(dbConnection), &gorm.Config{})
+func (s *EventStore) Migrate(d *gorm.DB) {
 	d.Table("events").AutoMigrate(&evt{})
 	d.Table(s.tableName).AutoMigrate(&evt{})
 }

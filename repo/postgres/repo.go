@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -28,7 +27,6 @@ import (
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	// Register uuid.UUID as BSON type.
@@ -68,12 +66,7 @@ type Repo struct {
 }
 
 // NewRepo creates a new Repo.
-func NewRepo(tableName string, enableBroadcast bool) (*Repo, error) {
-	dbConnection := os.Getenv("DB_CONNECTION")
-	d, err := gorm.Open(postgres.Open(dbConnection), &gorm.Config{})
-	if err != nil {
-		return nil, ErrCouldNotDialDB
-	}
+func NewRepo(d *gorm.DB, tableName string, enableBroadcast bool) (*Repo, error) {
 	return NewRepoWithClient(d, tableName, enableBroadcast)
 }
 
@@ -411,9 +404,7 @@ func (r *Repo) Close(ctx context.Context) {
 }
 
 // Migrate table
-func Migrate(tableName string, entity interface{}) {
-	dbConnection := os.Getenv("DB_CONNECTION")
-	d, _ := gorm.Open(postgres.Open(dbConnection), &gorm.Config{})
+func Migrate(d *gorm.DB, tableName string, entity interface{}) {
 	if err := d.Table(tableName).AutoMigrate(entity); err != nil {
 		panic(err)
 	}
