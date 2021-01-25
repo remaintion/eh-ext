@@ -339,7 +339,7 @@ func (r *Repo) BroadcastEntity(ctx context.Context, entity eh.Entity) {
 	}
 	data, _ := json.Marshal(en)
 
-	err = r.pubsub.Publish(ctx, context.Context, entity.EntityID(), data)
+	err = r.pubsub.Publish(ctx, entity.EntityID(), data)
 	if err != nil {
 		panic(err)
 	}
