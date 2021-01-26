@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -40,17 +41,10 @@ func (p *PubSub) Publish(ctx context.Context, id uuid.UUID, payload []byte) erro
 		Payload: string(payload),
 	}
 	data, _ := json.Marshal(msg)
-	requestID := ctx.Value("requestID").(string)
 
 	publishInput := &sns.PublishInput{
-		MessageAttributes: map[string]*sns.MessageAttributeValue{
-			"requestID": &sns.MessageAttributeValue{
-				StringValue: aws.String(requestID),
-			},
-		},
-		Message:        aws.String(string(data)),
-		MessageGroupId: aws.String(requestID),
-		TopicArn:       aws.String(os.Getenv("SNS_RESULT_ARN")),
+		Message:  aws.String(string(data)),
+		TopicArn: aws.String(os.Getenv("SNS_RESULT_ARN")),
 	}
 	if _, err := p.sns.Publish(publishInput); err != nil {
 		panic(err)
@@ -60,7 +54,6 @@ func (p *PubSub) Publish(ctx context.Context, id uuid.UUID, payload []byte) erro
 
 func (p *PubSub) Subscribe(ctx context.Context, id uuid.UUID) []byte {
 	dataCH := make(chan []byte)
-	requestID := ctx.Value("requestID").(string)
 
 	go func() {
 	Loop:
@@ -82,8 +75,7 @@ func (p *PubSub) Subscribe(ctx context.Context, id uuid.UUID) []byte {
 			}
 
 			for _, msg := range msgResult.Messages {
-				msgRequestID := msg.MessageAttributes["requestID"].String()
-				if msgRequestID == requestID {
+				if strings.Contains(*msg.Body, id.String()) {
 					rawMessage := map[string]interface{}{}
 					json.Unmarshal([]byte(*msg.Body), &rawMessage)
 

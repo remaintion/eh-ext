@@ -170,7 +170,7 @@ func (b *EventBus) handle(ctx context.Context, m eh.EventMatcher, h eh.EventHand
 				aws.String(sqs.QueueAttributeNameAll),
 			},
 			QueueUrl:            aws.String(b.queueURL),
-			MaxNumberOfMessages: aws.Int64(2),
+			MaxNumberOfMessages: aws.Int64(10),
 			VisibilityTimeout:   aws.Int64(100),
 			WaitTimeSeconds:     aws.Int64(1),
 		})
