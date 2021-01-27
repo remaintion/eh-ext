@@ -52,6 +52,7 @@ type EventBus struct {
 	errCh        chan eh.EventBusError
 	wg           sync.WaitGroup
 	queueURL     string
+	subscribers  []chan *sqs.Message
 }
 
 var sess *session.Session
@@ -62,17 +63,46 @@ func NewEventBus(appID string, opts ...option.ClientOption) (*EventBus, error) {
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 	sns := sns.New(sess)
-	sqs := sqs.New(sess)
+	sqss := sqs.New(sess)
 	queueURL := os.Getenv("SQS_URL")
 	// Get or create the topic.
-	return &EventBus{
-		appID:      appID,
-		sns:        sns,
-		sqs:        sqs,
-		queueURL:   queueURL,
-		registered: map[eh.EventHandlerType]struct{}{},
-		errCh:      make(chan eh.EventBusError, 100),
-	}, nil
+	eventBus := &EventBus{
+		appID:       appID,
+		sns:         sns,
+		sqs:         sqss,
+		queueURL:    queueURL,
+		registered:  map[eh.EventHandlerType]struct{}{},
+		errCh:       make(chan eh.EventBusError, 100),
+		subscribers: []chan *sqs.Message{},
+	}
+	go eventBus.subscribeMessages()
+	return eventBus, nil
+}
+
+func (b *EventBus) subscribeMessages() {
+	time.Sleep(10 * time.Second)
+	for {
+		msgResult, err := b.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
+			AttributeNames: []*string{
+				aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
+			},
+			MessageAttributeNames: []*string{
+				aws.String(sqs.QueueAttributeNameAll),
+			},
+			QueueUrl:            aws.String(b.queueURL),
+			MaxNumberOfMessages: aws.Int64(10),
+			VisibilityTimeout:   aws.Int64(100),
+			WaitTimeSeconds:     aws.Int64(1),
+		})
+		for _, msg := range msgResult.Messages {
+			for _, c := range b.subscribers {
+				c <- msg
+			}
+		}
+		if err != nil {
+			log.Println(err)
+		}
+	}
 }
 
 // HandlerType implements the HandlerType method of the eventhorizon.EventHandler interface.
@@ -141,8 +171,10 @@ func (b *EventBus) AddHandler(ctx context.Context, m eh.EventMatcher, h eh.Event
 
 	b.registered[h.HandlerType()] = struct{}{}
 
+	msgCh := make(chan *sqs.Message, 1)
+	b.subscribers = append(b.subscribers, msgCh)
 	b.wg.Add(1)
-	go b.handle(ctx, m, h)
+	go b.handle(ctx, m, h, msgCh)
 
 	return nil
 }
@@ -158,27 +190,13 @@ func (b *EventBus) Wait() {
 }
 
 // Handles all events coming in on the channel.
-func (b *EventBus) handle(ctx context.Context, m eh.EventMatcher, h eh.EventHandler) {
+func (b *EventBus) handle(ctx context.Context, m eh.EventMatcher, h eh.EventHandler, msgCh chan *sqs.Message) {
 	defer b.wg.Done()
 
 	for {
-		msgResult, err := b.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
-			AttributeNames: []*string{
-				aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
-			},
-			MessageAttributeNames: []*string{
-				aws.String(sqs.QueueAttributeNameAll),
-			},
-			QueueUrl:            aws.String(b.queueURL),
-			MaxNumberOfMessages: aws.Int64(10),
-			VisibilityTimeout:   aws.Int64(100),
-			WaitTimeSeconds:     aws.Int64(1),
-		})
-		for _, msg := range msgResult.Messages {
+		select {
+		case msg := <-msgCh:
 			b.handlerMessage(m, h, msg, ctx)
-		}
-		if err != nil {
-			log.Println(err)
 		}
 	}
 }
@@ -253,6 +271,7 @@ func (b *EventBus) handlerMessage(m eh.EventMatcher, h eh.EventHandler, msg *sqs
 	)
 
 	// Ignore non-matching events.
+	log.Println(m)
 	if !m.Match(event) {
 		log.Println("non matching events", event)
 		return
