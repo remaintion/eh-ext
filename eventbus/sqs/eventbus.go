@@ -81,6 +81,12 @@ func NewEventBus(appID string, opts ...option.ClientOption) (*EventBus, error) {
 
 func (b *EventBus) subscribeMessages() {
 	time.Sleep(10 * time.Second)
+	b.sqs.SetQueueAttributes(&sqs.SetQueueAttributesInput{
+		QueueUrl: aws.String(b.queueURL),
+		Attributes: aws.StringMap(map[string]string{
+			"ReceiveMessageWaitTimeSeconds": "20",
+		}),
+	})
 	for {
 		msgResult, err := b.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 			AttributeNames: []*string{
@@ -94,6 +100,7 @@ func (b *EventBus) subscribeMessages() {
 			VisibilityTimeout:   aws.Int64(100),
 			WaitTimeSeconds:     aws.Int64(1),
 		})
+
 		for _, msg := range msgResult.Messages {
 			for _, c := range b.subscribers {
 				c <- msg
@@ -140,14 +147,16 @@ func (b *EventBus) HandleEvent(ctx context.Context, event eh.Event) error {
 	}
 
 	publishInput := &sns.PublishInput{
-		Message:        aws.String(string(j)),
-		TopicArn:       aws.String(os.Getenv("SNS_ARN")),
-		MessageGroupId: aws.String(b.appID),
+		Message:                aws.String(string(j)),
+		TopicArn:               aws.String(os.Getenv("SNS_ARN")),
+		MessageGroupId:         aws.String(b.appID),
+		MessageDeduplicationId: aws.String(uuid.New().String()),
 	}
-
-	if _, err := b.sns.Publish(publishInput); err != nil {
+	if out, err := b.sns.Publish(publishInput); err != nil {
 		log.Println("could not publish event: " + err.Error())
 		return errors.New("could not publish event: " + err.Error())
+	} else {
+		log.Println("Publish out", out)
 	}
 
 	return nil
@@ -215,6 +224,10 @@ func (b *EventBus) handlerMessage(m eh.EventMatcher, h eh.EventHandler, msg *sqs
 	}
 	if err := json.Unmarshal([]byte(rawJSON), &e); err != nil {
 		err = fmt.Errorf("could not unmarshal event: %w", err)
+		b.sqs.DeleteMessage(&sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(b.queueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		})
 		select {
 		case b.errCh <- eh.EventBusError{Err: err, Ctx: ctx}:
 		default:
