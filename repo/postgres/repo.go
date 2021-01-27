@@ -161,12 +161,18 @@ func ParseJson(x reflect.Value, result map[string]interface{}) {
 
 func parseInnerJson(v reflect.Value, raw interface{}, isString bool) reflect.Value {
 	c := reflect.Indirect(v)
+	t := reflect.TypeOf(raw)
 
 	switch c.Kind() {
 	case reflect.Slice:
 		elem := c.Type().Elem()
 		tmp := []interface{}{}
-		json.Unmarshal([]byte(raw.(string)), &tmp)
+
+		if strings.Contains(t.String(), "[]interface") {
+			tmp = raw.([]interface{})
+		} else {
+			json.Unmarshal([]byte(raw.(string)), &tmp)
+		}
 		t := reflect.MakeSlice(reflect.SliceOf(elem), 0, 0)
 		for i := range tmp {
 			newV := reflect.Indirect(reflect.New(elem))
@@ -234,8 +240,14 @@ func parseInnerJson(v reflect.Value, raw interface{}, isString bool) reflect.Val
 			t.SetMapIndex(k, parsed)
 		}
 		c.Set(t)
+	case reflect.String:
+		c.SetString(raw.(string))
+	case reflect.Int:
+		c.SetInt(int64(raw.(float64)))
+	case reflect.Float64:
+		c.SetFloat(raw.(float64))
 	default:
-		// panic(c.Kind())
+		panic(c.Kind())
 	}
 
 	return c

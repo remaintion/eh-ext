@@ -53,11 +53,11 @@ func NewEventStoreWithClient(client *gorm.DB, dbPrefix string) (*EventStore, err
 	s := &EventStore{
 		client:    client,
 		dbPrefix:  dbPrefix,
-		tableName: dbPrefix + "_events",
+		tableName: "event_" + dbPrefix,
 	}
 
 	s.dbName = func(ctx context.Context) string {
-		return dbPrefix + "_events"
+		return "event_" + dbPrefix
 	}
 
 	return s, nil
