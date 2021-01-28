@@ -379,7 +379,7 @@ func (r *Repo) Save(ctx context.Context, entity eh.Entity) error {
 			panic(er)
 		}
 	} else {
-		er := r.client.Table(r.tableName).Updates(entity).Error
+		er := r.client.Table(r.tableName).Where("aggregate_id = ?", x["aggregate_id"]).Updates(x).Error
 		if er != nil {
 			panic(er)
 		}
